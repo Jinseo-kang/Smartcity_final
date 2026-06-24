@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>판교 vs 위례 — 업무지구 비교분석 시스템</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --pangyo: #1a6faf;
+    --pangyo-light: #cce3f5;
+    --wirye: #c0392b;
+    --wirye-light: #fadbd8;
+    --bg: #0f1923;
+    --surface: #162130;
+    --surface2: #1e2e40;
+    --border: #2a3f54;
+    --text: #e8eef4;
+    --text-muted: #7a9bb5;
+    --accent: #3ec6e0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Pretendard', 'Noto Sans KR', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+
+  /* Header */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .logo { font-size: 15px; font-weight: 700; color: var(--accent); letter-spacing: -0.3px; white-space: nowrap; }
+  .logo span { color: var(--text-muted); font-weight: 400; font-size: 12px; margin-left: 8px; }
+  .tab-group { display: flex; gap: 4px; margin-left: auto; }
+  .tab { padding: 6px 14px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); cursor: pointer; font-size: 13px; transition: all .15s; }
+  .tab.active { background: var(--accent); border-color: var(--accent); color: #0f1923; font-weight: 600; }
+  .source-note { font-size: 11px; color: var(--text-muted); margin-left: 8px; }
+
+  /* Layout */
+  .app { display: flex; height: calc(100vh - 53px); }
+
+  /* Side panel */
+  .panel {
+    width: 340px;
+    min-width: 300px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+  .panel-section { padding: 14px 16px; border-bottom: 1px solid var(--border); }
+  .panel-title { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 10px; }
+
+  /* Compare cards */
+  .compare-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .compare-card {
+    background: var(--surface2);
+    border-radius: 8px;
+    padding: 12px;
+    border: 1px solid var(--border);
+  }
+  .compare-card .label { font-size: 11px; font-weight: 700; margin-bottom: 4px; }
+  .compare-card.pangyo .label { color: var(--pangyo); }
+  .compare-card.wirye  .label { color: var(--wirye); }
+  .compare-card .value { font-size: 20px; font-weight: 800; line-height: 1; }
+  .compare-card .sub { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+
+  /* Stat rows */
+  .stat-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; border-bottom: 1px solid var(--border); }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-label { font-size: 12px; color: var(--text-muted); }
+  .stat-vals { display: flex; gap: 12px; }
+  .stat-val { font-size: 12px; font-weight: 600; text-align: right; min-width: 60px; }
+  .stat-val.p { color: var(--pangyo); }
+  .stat-val.w { color: var(--wirye); }
+
+  /* Legend */
+  .legend-item { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12px; }
+  .legend-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+  .legend-line { width: 20px; height: 3px; border-radius: 2px; flex-shrink: 0; }
+
+  /* Isochrone controls */
+  .iso-control { display: flex; gap: 6px; flex-wrap: wrap; }
+  .iso-btn {
+    padding: 5px 12px; border-radius: 20px; border: 1px solid var(--border);
+    background: transparent; color: var(--text-muted); cursor: pointer; font-size: 12px; transition: all .15s;
+  }
+  .iso-btn.active-p { background: var(--pangyo); border-color: var(--pangyo); color: #fff; }
+  .iso-btn.active-w { background: var(--wirye); border-color: var(--wirye); color: #fff; }
+  .iso-btn.active-both { background: var(--surface2); border-color: var(--accent); color: var(--accent); }
+
+  /* Chart container */
+  .chart-wrap { position: relative; height: 160px; margin-top: 8px; }
+
+  /* Map */
+  #map { flex: 1; }
+
+  /* Popup */
+  .leaflet-popup-content-wrapper { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,.5); }
+  .leaflet-popup-tip { background: var(--surface2); }
+  .leaflet-popup-content { color: var(--text); font-size: 13px; margin: 10px 14px; }
+  .popup-title { font-weight: 700; font-size: 14px; margin-bottom: 6px; }
+  .popup-row { display: flex; justify-content: space-between; gap: 16px; padding: 2px 0; font-size: 12px; color: var(--text-muted); }
+  .popup-row span:last-child { color: var(--text); font-weight: 600; }
+
+  /* Info box on map */
+  .map-info {
+    position: absolute; top: 10px; right: 10px; z-index: 999;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 14px; font-size: 12px; max-width: 220px;
+    box-shadow: 0 2px 12px rgba(0,0,0,.4);
+  }
+  .map-info-title { font-size: 11px; color: var(--text-muted); margin-bottom: 6px; font-weight: 600; }
+  .iso-reach { display: flex; justify-content: space-between; padding: 3px 0; }
+  .iso-reach .n { font-weight: 700; }
+  .iso-reach .p-color { color: var(--pangyo); }
+  .iso-reach .w-color { color: var(--wirye); }
+
+  /* Scrollbar */
+  .panel::-webkit-scrollbar { width: 4px; }
+  .panel::-webkit-scrollbar-track { background: transparent; }
+  .panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* View toggle */
+  .view-toggle { display: flex; gap: 4px; }
+  .vtab { padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); cursor: pointer; font-size: 11px; }
+  .vtab.on { background: var(--surface2); border-color: var(--accent); color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">📊 업무지구 비교분석
+    <span>판교테크노밸리 vs 위례신도시</span>
+  </div>
+  <div class="tab-group">
+    <button class="tab active" onclick="setView('map')">🗺 지도</button>
+    <button class="tab" onclick="setView('stats')">📈 통계</button>
+    <button class="tab" onclick="setView('transport')">🚇 교통</button>
+  </div>
+  <div class="source-note">출처: SGIS 2024 · subway_network · prom.space | 가천대 스마트시티학과</div>
+</header>
+
+<div class="app">
+  <!-- Side Panel -->
+  <div class="panel" id="panel">
+
+    <!-- 핵심 지표 비교 -->
+    <div class="panel-section">
+      <div class="panel-title">핵심 지표 비교</div>
+      <div class="compare-row">
+        <div class="compare-card pangyo">
+          <div class="label">🔵 판교테크노밸리</div>
+          <div class="value">97,336</div>
+          <div class="sub">종사자수 (2024)</div>
+        </div>
+        <div class="compare-card wirye">
+          <div class="label">🔴 위례신도시</div>
+          <div class="value">28,076</div>
+          <div class="sub">종사자수 (2024)</div>
+        </div>
+      </div>
+      <div style="margin-top:10px">
+        <div class="stat-row">
+          <div class="stat-label">구역 면적</div>
+          <div class="stat-vals">
+            <div class="stat-val p">31.2만㎡</div>
+            <div class="stat-val w">363.6만㎡</div>
+          </div>
+        </div>
+        <div class="stat-row">
+          <div class="stat-label">종사자 밀도</div>
+          <div class="stat-vals">
+            <div class="stat-val p">31.2명/만㎡</div>
+            <div class="stat-val w">7.7명/만㎡</div>
+          </div>
+        </div>
+        <div class="stat-row">
+          <div class="stat-label">상주인구 (2024)</div>
+          <div class="stat-vals">
+            <div class="stat-val p">~150명</div>
+            <div class="stat-val w">122,425명</div>
+          </div>
+        </div>
+        <div class="stat-row">
+          <div class="stat-label">직주비 (추정)</div>
+          <div class="stat-vals">
+            <div class="stat-val p" id="jikju-p">≈ 649</div>
+            <div class="stat-val w" id="jikju-w">0.23</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 등시간권 -->
+    <div class="panel-section">
+      <div class="panel-title">지하철 등시간권 (역 수 기준)</div>
+      <div class="stat-row">
+        <div class="stat-label">출발역</div>
+        <div class="stat-vals">
+          <div class="stat-val p" style="font-size:11px">판교역<br><span style="color:var(--text-muted);font-weight:400">신분당선·경강선</span></div>
+          <div class="stat-val w" style="font-size:11px">남위례역<br><span style="color:var(--text-muted);font-weight:400">8호선</span></div>
+        </div>
+      </div>
+      <div class="stat-row">
+        <div class="stat-label">30분권 역 수</div>
+        <div class="stat-vals">
+          <div class="stat-val p">80개</div>
+          <div class="stat-val w">81개</div>
+        </div>
+      </div>
+      <div class="stat-row">
+        <div class="stat-label">60분권 역 수</div>
+        <div class="stat-vals">
+          <div class="stat-val p">349개</div>
+          <div class="stat-val w">309개</div>
+        </div>
+      </div>
+      <div class="stat-row">
+        <div class="stat-label">강남 도달</div>
+        <div class="stat-vals">
+          <div class="stat-val p">약 15분</div>
+          <div class="stat-val w">약 28분</div>
+        </div>
+      </div>
+      <div class="stat-row">
+        <div class="stat-label">서울역 도달</div>
+        <div class="stat-vals">
+          <div class="stat-val p">약 35분</div>
+          <div class="stat-val w">약 45분</div>
+        </div>
+      </div>
+
+      <!-- 등시간권 레이어 토글 -->
+      <div style="margin-top:10px">
+        <div class="panel-title" style="margin-bottom:6px">등시간권 레이어 표시</div>
+        <div class="iso-control">
+          <button class="iso-btn" id="iso-p30" onclick="toggleIso('p30')">🔵 판교 30분</button>
+          <button class="iso-btn" id="iso-p60" onclick="toggleIso('p60')">🔵 판교 60분</button>
+          <button class="iso-btn" id="iso-w30" onclick="toggleIso('w30')">🔴 위례 30분</button>
+          <button class="iso-btn" id="iso-w60" onclick="toggleIso('w60')">🔴 위례 60분</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 토지이용 -->
+    <div class="panel-section" id="landuse-section">
+      <div class="panel-title">토지이용 구성비 (%)</div>
+      <div class="chart-wrap"><canvas id="luChart"></canvas></div>
+      <div style="margin-top:8px">
+        <div class="stat-row">
+          <div class="stat-label">주요 용도</div>
+          <div class="stat-vals">
+            <div class="stat-val p" style="font-size:11px">교육연구<br>33.6%</div>
+            <div class="stat-val w" style="font-size:11px">공동주택<br>45.4%</div>
+          </div>
+        </div>
+        <div class="stat-row">
+          <div class="stat-label">업무시설</div>
+          <div class="stat-vals">
+            <div class="stat-val p">21.4%</div>
+            <div class="stat-val w">2.3%</div>
+          </div>
+        </div>
+        <div class="stat-row">
+          <div class="stat-label">토지혼합도 (LUM)</div>
+          <div class="stat-vals">
+            <div class="stat-val p" id="lum-p">계산중</div>
+            <div class="stat-val w" id="lum-w">계산중</div>
+          </div>
+        </div>
+        <div class="stat-row">
+          <div class="stat-label">총 필지 수</div>
+          <div class="stat-vals">
+            <div class="stat-val p">65필지</div>
+            <div class="stat-val w">906필지</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 종사자 분포 -->
+    <div class="panel-section">
+      <div class="panel-title">종사자 지역 분포 (2024)</div>
+      <div class="chart-wrap"><canvas id="empChart"></canvas></div>
+    </div>
+
+    <!-- 범례 -->
+    <div class="panel-section">
+      <div class="panel-title">지도 범례</div>
+      <div class="legend-item"><div class="legend-line" style="background:var(--pangyo)"></div>판교 구역 경계</div>
+      <div class="legend-item"><div class="legend-line" style="background:var(--wirye)"></div>위례 구역 경계</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--pangyo);opacity:.25;width:20px;height:10px;border-radius:2px"></div>판교 30/60분 등시간권</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--wirye);opacity:.25;width:20px;height:10px;border-radius:2px"></div>위례 30/60분 등시간권</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#1a6faf"></div>판교역 / 핵심역</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#c0392b"></div>남위례역 / 핵심역</div>
+      <div style="margin-top:8px;font-size:11px;color:var(--text-muted)">
+        출처: prom.space 건축물 용도 데이터 기반<br>
+        구역계: 지구단위계획 고시 경계 (GeoJSON)<br>
+        종사자: SGIS 전국사업체조사 2024<br>
+        등시간권: subway_network.zip (2026-05-05)
+      </div>
+    </div>
+
+  </div><!-- /panel -->
+
+  <!-- Map -->
+  <div style="position:relative;flex:1">
+    <div id="map"></div>
+    <div class="map-info" id="mapInfo">
+      <div class="map-info-title">⏱ 현재 등시간권 도달 역 수</div>
+      <div class="iso-reach"><span class="p-color">🔵 판교 30분</span><span class="n p-color" id="info-p30">80개역</span></div>
+      <div class="iso-reach"><span class="p-color">🔵 판교 60분</span><span class="n p-color" id="info-p60">349개역</span></div>
+      <div class="iso-reach"><span class="w-color">🔴 위례 30분</span><span class="n w-color" id="info-w30">81개역</span></div>
+      <div class="iso-reach"><span class="w-color">🔴 위례 60분</span><span class="n w-color" id="info-w60">309개역</span></div>
+      <div style="margin-top:6px;font-size:10px;color:var(--text-muted)">역명 기준 중복 제거<br>subway_network.zip 다익스트라 분석</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────
+// 1. 지도 초기화
+// ─────────────────────────────────────────
+const map = L.map('map', {
+  center: [37.44, 127.13],
+  zoom: 12,
+  zoomControl: true
+});
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© OpenStreetMap contributors',
+  maxZoom: 19
+}).addTo(map);
+
+// ─────────────────────────────────────────
+// 2. 판교 / 위례 구역 경계 (GeoJSON 로드)
+//    파일이 없으면 근사 폴리곤으로 대체
+// ─────────────────────────────────────────
+const PANGYO_APPROX = [
+  [37.3875,127.0955],[37.4025,127.0955],[37.4065,127.1025],
+  [37.4055,127.1190],[37.3995,127.1270],[37.3875,127.1250],
+  [37.3835,127.1100],[37.3875,127.0955]
+];
+const WIRYE_APPROX = [
+  [37.4560,127.1300],[37.4780,127.1270],[37.4960,127.1340],
+  [37.5050,127.1430],[37.4990,127.1580],[37.4870,127.1620],
+  [37.4720,127.1580],[37.4600,127.1480],[37.4520,127.1360],
+  [37.4560,127.1300]
+];
+
+let pangyoLayer, wiryeLayer;
+
+async function loadBoundary(path, fallback, color, label) {
+  try {
+    const resp = await fetch(path);
+    if (!resp.ok) throw new Error('not found');
+    const gj = await resp.json();
+    return L.geoJSON(gj, {
+      style: { color, weight: 3, fillOpacity: 0.08, fillColor: color }
+    }).bindPopup(`<div class="popup-title">${label}</div>`);
+  } catch {
+    return L.polygon(fallback, {
+      color, weight: 3, fillOpacity: 0.08, fillColor: color,
+      dashArray: '6,4'
+    }).bindPopup(`<div class="popup-title">${label}</div><div style="font-size:11px;color:var(--text-muted)">(근사 경계 — GeoJSON 로드 실패)</div>`);
+  }
+}
+
+Promise.all([
+  loadBoundary('../data/boundary/pangyo_boundary.geojson', PANGYO_APPROX, '#1a6faf', '판교테크노밸리'),
+  loadBoundary('../data/boundary/Wirye_boundary.geojson',  WIRYE_APPROX,  '#c0392b', '위례신도시 업무·상업용지')
+]).then(([p, w]) => {
+  pangyoLayer = p.addTo(map);
+  wiryeLayer  = w.addTo(map);
+});
+
+// ─────────────────────────────────────────
+// 3. 핵심역 마커
+// ─────────────────────────────────────────
+function stationIcon(color) {
+  return L.divIcon({
+    className: '',
+    html: `<div style="width:14px;height:14px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 0 0 2px ${color}"></div>`,
+    iconSize: [14,14], iconAnchor:[7,7]
+  });
+}
+
+L.marker([37.39457, 127.11116], {icon: stationIcon('#1a6faf')})
+  .bindPopup(`<div class="popup-title">🔵 판교역 (핵심역)</div>
+    <div class="popup-row"><span>노선</span><span>신분당선 · 경강선</span></div>
+    <div class="popup-row"><span>30분권</span><span>80개역</span></div>
+    <div class="popup-row"><span>60분권</span><span>349개역</span></div>
+    <div class="popup-row"><span>강남 접근</span><span>약 15분</span></div>`)
+  .addTo(map);
+
+L.marker([37.46249, 127.13969], {icon: stationIcon('#c0392b')})
+  .bindPopup(`<div class="popup-title">🔴 남위례역 (핵심역)</div>
+    <div class="popup-row"><span>노선</span><span>서울 8호선</span></div>
+    <div class="popup-row"><span>30분권</span><span>81개역</span></div>
+    <div class="popup-row"><span>60분권</span><span>309개역</span></div>
+    <div class="popup-row"><span>강남 접근</span><span>약 28분</span></div>`)
+  .addTo(map);
+
+// ─────────────────────────────────────────
+// 4. 등시간권 레이어 (도달 역 포인트)
+// ─────────────────────────────────────────
+const isoLayers = {};
+let isoActive = {};
+
+async function loadIsoLayer(key, path, color, radius) {
+  try {
+    const resp = await fetch(path);
+    const gj = await resp.json();
+    isoLayers[key] = L.geoJSON(gj, {
+      filter: f => f.properties[key.includes('30') ? 'within_30' : 'within_60'],
+      pointToLayer: (f, latlng) => L.circleMarker(latlng, {
+        radius: radius,
+        fillColor: color, color, weight: 0,
+        fillOpacity: key.includes('30') ? 0.7 : 0.35
+      }),
+      onEachFeature: (f, layer) => {
+        layer.bindPopup(`<div class="popup-title">${f.properties.statnm}역</div>
+          <div class="popup-row"><span>노선</span><span>${f.properties.linenm}</span></div>
+          <div class="popup-row"><span>소요시간</span><span>${f.properties.travel_min}분</span></div>
+          <div class="popup-row"><span>출발역</span><span>${f.properties.source}</span></div>`);
+      }
+    });
+  } catch(e) {
+    console.warn('isochrone load fail:', key, e);
+  }
+}
+
+Promise.all([
+  loadIsoLayer('p30', '../data/processed/pangyo_isochrone.geojson', '#1a6faf', 5),
+  loadIsoLayer('p60', '../data/processed/pangyo_isochrone.geojson', '#1a6faf', 4),
+  loadIsoLayer('w30', '../data/processed/wirye_isochrone.geojson',  '#c0392b', 5),
+  loadIsoLayer('w60', '../data/processed/wirye_isochrone.geojson',  '#c0392b', 4),
+]);
+
+function toggleIso(key) {
+  if (isoActive[key]) {
+    if (isoLayers[key]) map.removeLayer(isoLayers[key]);
+    isoActive[key] = false;
+    document.getElementById('iso-'+key).className = 'iso-btn';
+  } else {
+    if (isoLayers[key]) isoLayers[key].addTo(map);
+    isoActive[key] = true;
+    const cls = key.startsWith('p') ? 'iso-btn active-p' : 'iso-btn active-w';
+    document.getElementById('iso-'+key).className = cls;
+  }
+}
+
+// ─────────────────────────────────────────
+// 5. 토지이용 차트
+// ─────────────────────────────────────────
+const LU_PANGYO = [
+  {label:'교육연구', pct:33.6, color:'#3ec6e0'},
+  {label:'업무시설', pct:21.4, color:'#1a6faf'},
+  {label:'자동차관련', pct:3.8, color:'#5b8def'},
+  {label:'위험물', pct:0.3, color:'#e74c3c'},
+  {label:'기타', pct:41.0, color:'#2a3f54'},
+];
+const LU_WIRYE = [
+  {label:'공동주택', pct:45.4, color:'#e74c3c'},
+  {label:'기타', pct:31.4, color:'#2a3f54'},
+  {label:'교육연구', pct:5.1, color:'#3ec6e0'},
+  {label:'제2종근린', pct:2.8, color:'#f39c12'},
+  {label:'나대지', pct:2.8, color:'#7f8c8d'},
+  {label:'단독주택', pct:2.4, color:'#e67e22'},
+  {label:'업무시설', pct:2.3, color:'#1a6faf'},
+  {label:'기타용도', pct:7.8, color:'#34495e'},
+];
+
+const luCtx = document.getElementById('luChart').getContext('2d');
+new Chart(luCtx, {
+  type: 'bar',
+  data: {
+    labels: ['교육연구', '업무시설', '공동주택', '단독주택', '근린생활', '기타'],
+    datasets: [
+      {
+        label: '판교',
+        data: [33.6, 21.4, 0, 0, 3.8+0, 41.0],
+        backgroundColor: '#1a6faf',
+      },
+      {
+        label: '위례',
+        data: [5.1, 2.3, 45.4, 2.4, 2.8+2.1, 39.9],
+        backgroundColor: '#c0392b',
+      }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: '#7a9bb5', font: {size:11} } } },
+    scales: {
+      x: { ticks: { color: '#7a9bb5', font:{size:10} }, grid: { color: '#2a3f54' } },
+      y: { ticks: { color: '#7a9bb5', font:{size:10}, callback: v => v+'%' }, grid: { color: '#2a3f54' }, max: 50 }
+    }
+  }
+});
+
+// ─────────────────────────────────────────
+// 6. 종사자 차트
+// ─────────────────────────────────────────
+const empCtx = document.getElementById('empChart').getContext('2d');
+new Chart(empCtx, {
+  type: 'bar',
+  data: {
+    labels: ['판교\n(삼평동)', '위례\n(하남)', '위례\n(수정구)', '위례\n(송파)'],
+    datasets: [{
+      label: '종사자수 (명)',
+      data: [97336, 3668, 17000, 7408],
+      backgroundColor: ['#1a6faf', '#c0392b', '#c0392b', '#c0392b'],
+      borderRadius: 4,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { color: '#7a9bb5', font:{size:10} }, grid: { color: '#2a3f54' } },
+      y: { ticks: { color: '#7a9bb5', font:{size:10}, callback: v => (v/1000).toFixed(0)+'k' }, grid: { color: '#2a3f54' } }
+    }
+  }
+});
+
+// ─────────────────────────────────────────
+// 7. LUM 계산 (엔트로피 지수)
+// ─────────────────────────────────────────
+function calcLUM(data) {
+  const total = data.reduce((s,d) => s + d.pct, 0);
+  const n = data.filter(d => d.pct > 0).length;
+  const entropy = -data.reduce((s,d) => {
+    const p = d.pct / total;
+    return p > 0 ? s + p * Math.log(p) : s;
+  }, 0);
+  return (entropy / Math.log(n)).toFixed(3);
+}
+document.getElementById('lum-p').textContent = calcLUM(LU_PANGYO);
+document.getElementById('lum-w').textContent = calcLUM(LU_WIRYE);
+
+// ─────────────────────────────────────────
+// 8. 뷰 전환 (탭)
+// ─────────────────────────────────────────
+function setView(v) {
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    t.className = 'tab' + (['map','stats','transport'][i] === v ? ' active' : '');
+  });
+  if (v === 'transport') {
+    // 등시간권 자동 활성화
+    ['p30','p60','w30','w60'].forEach(k => {
+      if (!isoActive[k]) toggleIso(k);
+    });
+  }
+  if (v === 'map') {
+    map.invalidateSize();
+  }
+}
+</script>
+</body>
+</html>
